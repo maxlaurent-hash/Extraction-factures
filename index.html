@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apthitude — Extracteur de Factures</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --g9:#1A4731;--g7:#2D6A4F;--g5:#52B788;--g1:#D8F3DC;--g0:#F0FAF4;
+    --b8:#1B3A5C;--b1:#DBEAFE;--r6:#DC2626;--r0:#FEF2F2;
+    --am:#FEF3C7;--amd:#78350F;
+    --gr9:#111827;--gr7:#374151;--gr5:#6B7280;--gr3:#D1D5DB;--gr1:#F3F4F6;--gr0:#F9FAFB;
+    --w:#FFFFFF;--sh:0 1px 3px rgba(0,0,0,.08);--shm:0 4px 16px rgba(0,0,0,.10)
+  }
+  body{font-family:'Inter',sans-serif;background:var(--gr0);color:var(--gr9);min-height:100vh}
+  header{background:var(--g9);padding:0 32px;display:flex;align-items:center;height:64px;gap:16px;box-shadow:var(--shm)}
+  .logo{width:36px;height:36px;background:var(--g5);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  header h1{color:var(--w);font-size:17px;font-weight:600}
+  header span{color:var(--g5);font-size:13px;margin-left:4px}
+  .hr{margin-left:auto;color:var(--g1);font-size:12px;opacity:.7}
+  .container{max-width:1100px;margin:0 auto;padding:32px 24px}
+
+  .api-banner{background:var(--w);border:1px solid var(--gr1);border-radius:14px;padding:20px 24px;margin-bottom:20px;box-shadow:var(--sh)}
+  .api-banner.ok{border-color:var(--g5);background:var(--g0)}
+  .api-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .api-label{font-size:13px;font-weight:600;color:var(--gr7);white-space:nowrap}
+  .api-input{flex:1;min-width:200px;border:1px solid var(--gr3);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Mono',monospace;color:var(--gr7);outline:none}
+  .api-input:focus{border-color:var(--g5);box-shadow:0 0 0 2px rgba(82,183,136,.2)}
+  .api-save{background:var(--g7);color:var(--w);border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+  .api-save:hover{background:var(--g9)}
+  .api-status{font-size:12px;margin-top:8px}
+  .api-status.ok{color:var(--g7)}
+  .api-status.miss{color:var(--amd)}
+
+  .steps{display:flex;align-items:center;background:var(--w);border-radius:12px;padding:16px 24px;margin-bottom:28px;box-shadow:var(--sh);border:1px solid var(--gr1)}
+  .step{display:flex;align-items:center;gap:10px;flex:1}
+  .step-n{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--gr1);color:var(--gr5);transition:all .3s}
+  .step.active .step-n{background:var(--g7);color:var(--w)}
+  .step.done .step-n{background:var(--g5);color:var(--w)}
+  .step-l{font-size:13px;color:var(--gr5);font-weight:500}
+  .step.active .step-l{color:var(--g9)}
+  .step.done .step-l{color:var(--g7)}
+  .step-div{width:32px;height:1px;background:var(--gr3);flex-shrink:0}
+
+  .card{background:var(--w);border-radius:14px;border:1px solid var(--gr1);box-shadow:var(--sh);overflow:hidden;margin-bottom:20px}
+  .card-hdr{padding:16px 24px;border-bottom:1px solid var(--gr1);display:flex;align-items:center;gap:12px;background:var(--gr0)}
+  .card-hdr h2{font-size:15px;font-weight:600}
+  .card-hdr p{font-size:12px;color:var(--gr5);margin-top:1px}
+  .card-body{padding:24px}
+
+  .drop{border:2px dashed var(--gr3);border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .25s;background:var(--gr0);position:relative}
+  .drop:hover,.drop.over{border-color:var(--g5);background:var(--g0)}
+  .drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .drop h3{font-size:15px;font-weight:600;color:var(--gr7);margin:12px 0 6px}
+  .drop p{font-size:13px;color:var(--gr5)}
+  .drop .br{color:var(--g7);font-weight:600;text-decoration:underline}
+
+  .flist{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+  .fitem{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;background:var(--gr0);border:1px solid var(--gr1)}
+  .fname{flex:1;font-weight:500;color:var(--gr7);font-family:'DM Mono',monospace;font-size:12px}
+  .fsize{color:var(--gr5);font-size:11px}
+  .fst{font-size:11px;font-weight:600;padding:3px 8px;border-radius:20px}
+  .st-p{background:var(--gr1);color:var(--gr5)}
+  .st-l{background:var(--am);color:var(--amd)}
+  .st-d{background:var(--g1);color:var(--g7)}
+  .st-e{background:var(--r0);color:var(--r6)}
+  .frem{background:none;border:none;cursor:pointer;color:var(--gr3);font-size:16px;padding:2px 4px;border-radius:4px}
+  .frem:hover{color:var(--r6);background:var(--r0)}
+
+  .btn-p{background:var(--g7);color:var(--w);border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s;font-family:'Inter',sans-serif}
+  .btn-p:hover:not(:disabled){background:var(--g9)}
+  .btn-p:disabled{opacity:.5;cursor:not-allowed}
+  .btn-s{background:var(--w);color:var(--gr7);border:1px solid var(--gr3);border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:6px}
+  .btn-s:hover{background:var(--gr0)}
+  .btn-x{background:var(--b8);color:var(--w);border:none;border-radius:8px;padding:12px 24px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif}
+  .btn-x:hover{background:#2C5F8A}
+
+  .prog{height:4px;background:var(--gr1);border-radius:2px;margin-top:16px;overflow:hidden;display:none}
+  .prog-f{height:100%;background:linear-gradient(90deg,var(--g5),var(--g7));border-radius:2px;transition:width .4s;width:0%}
+
+  .sumbar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .sumc{background:var(--w);border-radius:12px;border:1px solid var(--gr1);padding:14px 16px;box-shadow:var(--sh)}
+  .sumc .lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--gr5);margin-bottom:6px}
+  .sumc .val{font-size:18px;font-weight:700;font-family:'DM Mono',monospace}
+  .sumc.tot .val{color:var(--g7)}
+  .sumc.nb .val{color:var(--b8)}
+  .sumc.incomplet .val{color:var(--r6)}
+  .sumc.veolia .val{color:var(--amd)}
+
+  .res-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+  .res-cnt{font-size:13px;color:var(--gr5);background:var(--gr1);padding:4px 12px;border-radius:20px}
+  .tw{overflow-x:auto;border-radius:10px;border:1px solid #E5E7EB}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead tr{background:var(--g9)}
+  thead th{padding:10px 12px;text-align:left;color:var(--w);font-weight:600;font-size:11px;white-space:nowrap}
+  tbody tr{border-bottom:1px solid var(--gr1)}
+  tbody tr:hover{background:var(--g0)}
+  tbody tr.incomplete{background:#FFFBEB}
+  tbody td{padding:9px 12px;color:var(--gr7);vertical-align:middle}
+  .td-e{border:1px solid #E5E7EB;border-radius:6px;padding:4px 7px;font-size:12px;width:100%;min-width:100px;font-family:'Inter',sans-serif;color:var(--gr7);background:var(--w);outline:none}
+  .td-e:focus{border-color:var(--g5);box-shadow:0 0 0 2px rgba(82,183,136,.2)}
+  .ae{border:1px solid #E5E7EB;border-radius:6px;padding:4px 7px;font-size:12px;width:90px;font-family:'DM Mono',monospace;color:var(--g7);font-weight:700;text-align:right;outline:none}
+
+  /* Badge type à compléter */
+  .badge-todo{background:var(--am);color:var(--amd);font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap}
+  .badge-ev{background:var(--g1);color:var(--g9);font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+  .badge-st{background:var(--b1);color:var(--b8);font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px}
+
+  .info-b{background:var(--b1);border:1px solid #BFDBFE;border-radius:10px;padding:12px 16px;font-size:13px;color:var(--b8);display:flex;gap:10px;margin-bottom:16px}
+  .warn-b{background:var(--am);border:1px solid #FCD34D;border-radius:10px;padding:12px 16px;font-size:13px;color:var(--amd);display:flex;gap:10px;margin-bottom:16px}
+  .act-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .del-btn{background:none;border:none;cursor:pointer;color:var(--gr3);padding:4px;border-radius:4px;font-size:14px}
+  .del-btn:hover{color:var(--r6);background:var(--r0)}
+
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite}
+  #toast{position:fixed;bottom:24px;right:24px;background:var(--gr9);color:var(--w);padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:all .3s;z-index:1000;pointer-events:none;max-width:320px}
+  #toast.show{transform:translateY(0);opacity:1}
+  #toast.ok{background:var(--g7)}
+  #toast.err{background:var(--r6)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🌿</div>
+  <h1>Apthitude <span>— Extracteur de Factures</span></h1>
+  <div class="hr">Propulsé par Claude AI · Données traitées localement</div>
+</header>
+<div class="container">
+
+  <div class="api-banner" id="apiBanner">
+    <div class="api-row">
+      <span class="api-label">🔑 Clé API Claude (Anthropic)</span>
+      <input type="password" class="api-input" id="apiKey" placeholder="sk-ant-...">
+      <button class="api-save" id="apiSave">Enregistrer</button>
+    </div>
+    <div class="api-status miss" id="apiStatus">⚠️ Clé API requise — console.anthropic.com</div>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="s1"><div class="step-n">1</div><div class="step-l">Déposer les PDFs</div></div>
+    <div class="step-div"></div>
+    <div class="step" id="s2"><div class="step-n">2</div><div class="step-l">Extraction IA</div></div>
+    <div class="step-div"></div>
+    <div class="step" id="s3"><div class="step-n">3</div><div class="step-l">Vérifier & compléter</div></div>
+    <div class="step-div"></div>
+    <div class="step" id="s4"><div class="step-n">4</div><div class="step-l">Exporter pour BDD</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr"><span style="font-size:20px">📂</span>
+      <div>
+        <h2>Déposer les factures PDF</h2>
+        <p>Nommer les fichiers : <strong>GROUPE_CLIENT_NUMERO.pdf</strong> · Ex: <strong>VEOLIA_SADE_260462.pdf</strong></p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="drop" id="drop">
+        <input type="file" id="fi" accept=".pdf" multiple>
+        <div style="font-size:40px">📄</div>
+        <h3>Glisser vos factures ici</h3>
+        <p>ou <span class="br">cliquer pour parcourir</span> · PDF uniquement</p>
+      </div>
+      <div class="flist" id="flist"></div>
+      <div class="prog" id="prog"><div class="prog-f" id="progf"></div></div>
+      <button class="btn-p" id="extBtn" disabled>
+        <span class="spin" id="spin" style="display:none"></span>
+        <span id="extTxt">✨ Lancer l'extraction IA</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card" id="resCard" style="display:none">
+    <div class="card-hdr"><span style="font-size:20px">✅</span>
+      <div>
+        <h2>Données extraites — Vérification</h2>
+        <p>Complétez les lignes en orange avant d'exporter</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="info-b" id="infoBanner">ℹ️ <span>Les cellules sont <strong>modifiables</strong>. Le groupe est lu depuis le nom du fichier.</span></div>
+      <div class="warn-b" id="warnBanner" style="display:none">⚠️ <span id="warnTxt"></span></div>
+
+      <div class="sumbar">
+        <div class="sumc tot"><div class="lbl">CA Total HT</div><div class="val" id="sT">—</div></div>
+        <div class="sumc veolia"><div class="lbl">CA Groupe VEOLIA</div><div class="val" id="sV">—</div></div>
+        <div class="sumc nb"><div class="lbl">Factures traitées</div><div class="val" id="sN">—</div></div>
+        <div class="sumc incomplet"><div class="lbl">⚠️ Type à compléter</div><div class="val" id="sI">—</div></div>
+      </div>
+
+      <div class="res-hdr">
+        <span class="res-cnt" id="resCnt">0 facture(s)</span>
+        <div class="act-row">
+          <button class="btn-s" id="addRow">+ Ajouter ligne</button>
+          <button class="btn-x" id="expBtn">⬇️ Exporter vers BDD Dashboard</button>
+        </div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>N° Facture</th><th>Date</th><th>Mois</th><th>Client</th>
+            <th>Groupe</th><th>Type EV/ST</th>
+            <th style="text-align:right">Total HT</th><th style="text-align:right">TTC</th>
+            <th>Source</th><th></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const MOIS=['Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre','Janvier','Février','Mars'];
+let files=[], invoices=[];
+
+// ── API KEY ──
+function getKey(){return localStorage.getItem('claude_api_key')||''}
+function loadKey(){const k=getKey();if(k){document.getElementById('apiKey').value=k;showKeyOk()}}
+function showKeyOk(){
+  document.getElementById('apiStatus').className='api-status ok';
+  document.getElementById('apiStatus').innerHTML='✅ Clé enregistrée — <button style="background:none;border:none;color:var(--g7);font-size:12px;cursor:pointer;text-decoration:underline" onclick="clearKey()">Modifier</button>';
+  document.getElementById('apiBanner').classList.add('ok');
+}
+function clearKey(){localStorage.removeItem('claude_api_key');document.getElementById('apiKey').value='';document.getElementById('apiStatus').className='api-status miss';document.getElementById('apiStatus').textContent='⚠️ Clé API requise';document.getElementById('apiBanner').classList.remove('ok')}
+document.getElementById('apiSave').addEventListener('click',()=>{
+  const k=document.getElementById('apiKey').value.trim();
+  if(k.length<20){toast('Clé invalide','err');return}
+  localStorage.setItem('claude_api_key',k);showKeyOk();toast('✅ Clé enregistrée !','ok');
+});
+loadKey();
+
+// ── DROP ──
+const drop=document.getElementById('drop'),fi=document.getElementById('fi');
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');addFiles([...e.dataTransfer.files])});
+fi.addEventListener('change',()=>{addFiles([...fi.files]);fi.value=''});
+
+function addFiles(nf){
+  nf.filter(f=>f.type==='application/pdf').forEach(f=>{if(!files.find(x=>x.name===f.name))files.push(f)});
+  renderFiles();
+  document.getElementById('extBtn').disabled=files.length===0;
+}
+function renderFiles(){
+  const l=document.getElementById('flist');l.innerHTML='';
+  files.forEach((f,i)=>{
+    const d=document.createElement('div');d.className='fitem';
+    d.innerHTML=`<span>📄</span><span class="fname">${f.name}</span><span class="fsize">${(f.size/1024).toFixed(0)} Ko</span><span class="fst st-p" id="fs${i}">En attente</span><button class="frem" onclick="rmFile(${i})">×</button>`;
+    l.appendChild(d);
+  });
+}
+function rmFile(i){files.splice(i,1);renderFiles();document.getElementById('extBtn').disabled=files.length===0}
+
+function extractGroupe(filename){
+  const parts=filename.replace(/\.pdf$/i,'').split('_');
+  return parts.length>=2?parts[0].toUpperCase():'';
+}
+
+function toB64(file){
+  return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('Erreur lecture'));r.readAsDataURL(file)});
+}
+
+// ── EXTRACTION ──
+document.getElementById('extBtn').addEventListener('click',extractAll);
+async function extractAll(){
+  const key=getKey();
+  if(!key){toast('Veuillez enregistrer votre clé API','err');return}
+  setExtracting(true);invoices=[];setStep(2);
+  const prog=document.getElementById('prog'),fill=document.getElementById('progf');
+  prog.style.display='block';
+
+  for(let i=0;i<files.length;i++){
+    setSt(i,'st-l','⏳ Analyse…');
+    fill.style.width=`${Math.round(i/files.length*100)}%`;
+    try{
+      const b64=await toB64(files[i]);
+      const groupe=extractGroupe(files[i].name);
+      const data=await callClaude(b64,files[i].name,groupe,key);
+      invoices.push(...data);
+      setSt(i,'st-d',`✅ ${data.length} facture(s)`);
+    }catch(e){
+      setSt(i,'st-e','❌ '+(e.message||'Erreur'));
+      console.error(e);
+    }
+  }
+  fill.style.width='100%';
+  setTimeout(()=>{prog.style.display='none';fill.style.width='0%'},600);
+  setExtracting(false);
+  if(invoices.length){renderResults();setStep(3)}
+  else toast('Aucune donnée extraite','err');
+}
+
+async function callClaude(b64,filename,groupe,key){
+  const prompt=`Tu es un assistant d'extraction de factures pour Apthitude (PME espaces verts, Normandie).
+
+Analyse cette facture et retourne UNIQUEMENT un JSON valide, sans markdown.
+
+Format attendu:
+[{
+  "numero_facture": "string",
+  "date": "DD/MM/YYYY",
+  "mois": "Nom du mois en français avec majuscule (Avril, Mai, Juin...)",
+  "annee": "YYYY",
+  "client": "Nom COMPLET du destinataire (celui à qui Apthitude facture, pas l'émetteur)",
+  "groupe": "${groupe||''}",
+  "type": "EV ou ST ou INCONNU",
+  "total_ht": nombre décimal,
+  "tva": nombre décimal,
+  "total_ttc": nombre décimal
+}]
+
+Règles importantes:
+- client = DESTINATAIRE de la facture (pas l'émetteur Apthitude)
+- groupe = "${groupe||'À compléter'}" (extrait du nom fichier: ${filename})
+- type: analyse la DÉSIGNATION de la facture pour déterminer:
+  * "EV" si la désignation mentionne clairement entretien espaces verts / végétation / tonte / élagage
+  * "ST" si la désignation mentionne clairement travaux / sous-traitance / terrassement / pose / infrastructure
+  * "INCONNU" si la désignation est ambiguë ou ne permet pas de trancher avec certitude
+- Les montants sont des nombres (ex: 2928.95 pas "2 928,95 €")
+- Fichier source: "${filename}"`;
+
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:1000,
+      messages:[{role:'user',content:[
+        {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
+        {type:'text',text:prompt}
+      ]}]
+    })
+  });
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`API ${res.status}`)}
+  const d=await res.json();
+  const txt=d.content?.find(b=>b.type==='text')?.text||'[]';
+  return JSON.parse(txt.replace(/```json|```/g,'').trim()).map(inv=>({...inv,source:filename}));
+}
+
+// ── RÉSULTATS ──
+function renderResults(){
+  document.getElementById('resCard').style.display='block';
+  document.getElementById('resCnt').textContent=`${invoices.length} facture(s)`;
+  const tbody=document.getElementById('tbody');tbody.innerHTML='';
+  invoices.forEach((inv,i)=>renderRow(inv,i,tbody));
+  updateSummary();
+  document.getElementById('resCard').scrollIntoView({behavior:'smooth',block:'start'});
+  setStep(4);
+}
+
+function renderRow(inv,i,tbody){
+  const tr=document.createElement('tr');
+  const isInconnu=!inv.type||inv.type==='INCONNU';
+  if(isInconnu)tr.classList.add('incomplete');
+
+  const mOpts=MOIS.map(m=>`<option value="${m}"${m===inv.mois?' selected':''}>${m}</option>`).join('');
+  const tOpts=['EV','ST','INCONNU'].map(t=>`<option value="${t}"${t===inv.type?' selected':''}>${t}</option>`).join('');
+
+  const typeBadge=isInconnu
+    ?`<span class="badge-todo">⚠️ À compléter</span>`
+    :inv.type==='EV'?`<span class="badge-ev">EV</span>`:`<span class="badge-st">ST</span>`;
+
+  tr.innerHTML=`
+    <td><input class="td-e" style="width:75px" value="${inv.numero_facture||''}" onchange="upd(${i},'numero_facture',this.value)"></td>
+    <td><input class="td-e" style="width:90px" value="${inv.date||''}" onchange="upd(${i},'date',this.value)"></td>
+    <td><select class="td-e" style="width:95px" onchange="upd(${i},'mois',this.value);updateSummary()">${mOpts}</select></td>
+    <td><input class="td-e" style="min-width:150px" value="${inv.client||''}" onchange="upd(${i},'client',this.value)"></td>
+    <td><input class="td-e" style="width:90px" value="${inv.groupe||''}" onchange="upd(${i},'groupe',this.value);updateSummary()"></td>
+    <td>
+      <select class="td-e" style="width:100px" onchange="upd(${i},'type',this.value);updateSummary();rerenderRow(this,${i})">
+        ${tOpts}
+      </select>
+      <div style="margin-top:3px">${typeBadge}</div>
+    </td>
+    <td><input class="ae" value="${(inv.total_ht||0).toFixed(2)}" onchange="upd(${i},'total_ht',parseFloat(this.value)||0);updateSummary()"></td>
+    <td style="font-size:11px;text-align:right;font-family:'DM Mono',monospace">${(inv.total_ttc||0).toFixed(2)} €</td>
+    <td style="font-size:10px;color:var(--gr5);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${inv.source||''}">${inv.source||''}</td>
+    <td><button class="del-btn" onclick="delRow(${i})">🗑</button></td>`;
+  tbody.appendChild(tr);
+}
+
+function rerenderRow(sel,i){
+  // Met à jour le badge sans re-render tout
+  const tr=sel.closest('tr');
+  const val=sel.value;
+  const badge=tr.querySelector('div[style]');
+  if(val==='INCONNU'||!val){
+    badge.innerHTML='<span class="badge-todo">⚠️ À compléter</span>';
+    tr.classList.add('incomplete');
+  } else if(val==='EV'){
+    badge.innerHTML='<span class="badge-ev">EV</span>';
+    tr.classList.remove('incomplete');
+  } else {
+    badge.innerHTML='<span class="badge-st">ST</span>';
+    tr.classList.remove('incomplete');
+  }
+}
+
+function upd(i,k,v){invoices[i][k]=v}
+function delRow(i){invoices.splice(i,1);renderResults()}
+
+document.getElementById('addRow').addEventListener('click',()=>{
+  invoices.push({numero_facture:'',date:'',mois:'Avril',annee:'2026',client:'',groupe:'',type:'INCONNU',total_ht:0,tva:0,total_ttc:0,source:'Manuel'});
+  renderResults();
+  document.getElementById('tbody').lastElementChild?.scrollIntoView({behavior:'smooth'});
+});
+
+function updateSummary(){
+  const fmt=v=>v.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+  const tot=invoices.reduce((s,i)=>s+(parseFloat(i.total_ht)||0),0);
+  const veolia=invoices.filter(i=>(i.groupe||'').toUpperCase()==='VEOLIA').reduce((s,i)=>s+(parseFloat(i.total_ht)||0),0);
+  const inconnus=invoices.filter(i=>!i.type||i.type==='INCONNU').length;
+  document.getElementById('sT').textContent=fmt(tot);
+  document.getElementById('sV').textContent=fmt(veolia);
+  document.getElementById('sN').textContent=invoices.length;
+  document.getElementById('sI').textContent=inconnus;
+
+  // Bannière avertissement
+  const warn=document.getElementById('warnBanner');
+  if(inconnus>0){
+    document.getElementById('warnTxt').textContent=`${inconnus} facture(s) sans type EV/ST défini (lignes en orange). Veuillez les compléter avant d'exporter.`;
+    warn.style.display='flex';
+  } else {
+    warn.style.display='none';
+  }
+}
+
+// ── EXPORT ──
+document.getElementById('expBtn').addEventListener('click',()=>{
+  if(!invoices.length){toast('Aucune donnée','err');return}
+
+  const inconnus=invoices.filter(i=>!i.type||i.type==='INCONNU').length;
+  if(inconnus>0){
+    if(!confirm(`${inconnus} facture(s) ont un type INCONNU.\nElles seront exportées sans ventilation EV/ST — vous devrez les compléter manuellement dans la BDD.\n\nContinuer quand même ?`)) return;
+  }
+
+  const wb=XLSX.utils.book_new();
+
+  // Onglet BDD — format exact dashboard
+  // Pour les INCONNU : on met le total en EV par défaut avec un marqueur à corriger
+  const bddData=[['MOIS','CLIENT','EV (€)','ST (€)','OETH','GROUPE','⚠️ À VÉRIFIER']];
+  invoices.forEach(inv=>{
+    const ht=parseFloat(inv.total_ht)||0;
+    let ev=0,st=0,flag='';
+    if(inv.type==='EV'){ev=ht}
+    else if(inv.type==='ST'){st=ht}
+    else{ev=ht;flag='⚠️ Type inconnu — à répartir EV/ST'}
+    bddData.push([inv.mois||'',inv.client||'',ev,st,0,inv.groupe||'',flag]);
+  });
+  const wsBdd=XLSX.utils.aoa_to_sheet(bddData);
+  wsBdd['!cols']=[{wch:10},{wch:35},{wch:14},{wch:14},{wch:8},{wch:18},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,wsBdd,'À importer dans BDD');
+
+  // Onglet récap
+  const recapData=[['MOIS','CLIENT','GROUPE','TYPE','TOTAL HT (€)','⚠️ À VÉRIFIER']];
+  invoices.forEach(inv=>{
+    recapData.push([inv.mois,inv.client,inv.groupe,inv.type==='INCONNU'?'❓':inv.type,parseFloat(inv.total_ht)||0,inv.type==='INCONNU'?'Répartir en EV ou ST':'']);
+  });
+  const wsRecap=XLSX.utils.aoa_to_sheet(recapData);
+  wsRecap['!cols']=[{wch:10},{wch:35},{wch:18},{wch:8},{wch:14},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,wsRecap,'Récapitulatif');
+
+  XLSX.writeFile(wb,'Import_BDD_Apthitude.xlsx');
+  toast(inconnus>0?`⚠️ Exporté avec ${inconnus} type(s) à vérifier`:'✅ Export réussi !',inconnus>0?'':'ok');
+});
+
+// ── HELPERS ──
+function setExtracting(on){
+  document.getElementById('extBtn').disabled=on;
+  document.getElementById('spin').style.display=on?'inline-block':'none';
+  document.getElementById('extTxt').textContent=on?'Analyse en cours…':'✨ Lancer l\'extraction IA';
+}
+function setSt(i,cls,lbl){const e=document.getElementById(`fs${i}`);if(e){e.className=`fst ${cls}`;e.textContent=lbl}}
+function setStep(n){[1,2,3,4].forEach(s=>{const e=document.getElementById(`s${s}`);e.className='step'+(s<n?' done':s===n?' active':'')})}
+function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className=`show ${type}`;setTimeout(()=>{t.className=''},4000)}
+</script>
+</body>
+</html>
